@@ -1,0 +1,27 @@
+[project]
+name = "electrolyser"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "hishel[fastapi,httpx]>=1.1.7",
+    "httpx>=0.28.1",
+    "marimo[sql]>=0.18.4",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.0",
+    "pandas>=2.3.3",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.12.0",
+    "pyzmq>=27.1.0",
+]
+
+[dependency-groups]
+notebook = [
+    "marimo>=0.18.4",
+]
+viz = [
+    "matplotlib>=3.10.8",
+    "plotly>=6.5.0",
+    "plotly-resampler>=0.11.0",
+]
