@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: stg_weather_physics
+    description: "Enriched weather data with physics calculations"
+    columns:
+      - name: timestamp
+        tests:
+          - unique
+          - not_null
+      - name: wind_speed_m_s
+        tests:
+          - not_null
+          # Built-in test: Warn if wind is negative (physically impossible)
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+  - name: stg_weather
+    description: "Staging table for raw weather data"
+    columns:
+      - name: humidity_percent
+        tests:
+          # Check if humidity is within the valid physical range (0-100)
+          - dbt_utils.expression_is_true:
+              expression: "between 0 and 100"
+              
