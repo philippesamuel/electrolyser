@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: weather_system
+    # This refers to the alias you defined in profiles.yml
+    database: raw_db 
+    schema: main 
+    tables:
+      - name: weather

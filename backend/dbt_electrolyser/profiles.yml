@@ -1,0 +1,13 @@
+dbt_electrolyser:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: 'analytics.duckdb'  # The new DB where transformed tables (H2, Power) live
+      extensions:
+        - httpfs
+        - sqlite
+      # This is the magic part: Map the SQLite file to a DuckDB alias
+      attach:
+        - path: '../database.db'  # Relative path to your existing SQLite DB
+          alias: raw_db
