@@ -8,3 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Dotenv files
+.env
+
+# Database
+database.db
+

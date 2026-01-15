@@ -1,4 +1,5 @@
 """Model air properties"""
+
 import numpy as np
 from pydantic import BaseModel, Field
 
@@ -6,7 +7,9 @@ from pydantic import BaseModel, Field
 class AirState(BaseModel):
     temperature_c: float = Field(..., description="Air temperature in degrees Celsius")
     pressure_pa: float = Field(..., description="Air pressure in Pascals")
-    relative_humidity: float = Field(ge=0, le=1, description="Relative humidity as a fraction (0 to 1)")
+    relative_humidity: float = Field(
+        ge=0, le=1, description="Relative humidity as a fraction (0 to 1)"
+    )
 
     @property
     def density_kg_m3(self) -> float:
@@ -14,11 +17,13 @@ class AirState(BaseModel):
         return calc_humid_air_density(
             temperature_c=self.temperature_c,
             pressure_pa=self.pressure_pa,
-            relative_humidity=self.relative_humidity
+            relative_humidity=self.relative_humidity,
         )
 
 
-def calc_humid_air_density(temperature_c: float, pressure_pa: float, relative_humidity: float) -> float:
+def calc_humid_air_density(
+    temperature_c: float, pressure_pa: float, relative_humidity: float
+) -> float:
     """Calculate the density of humid air using the ideal gas law.
 
     Args:
@@ -37,7 +42,9 @@ def calc_humid_air_density(temperature_c: float, pressure_pa: float, relative_hu
     temperature_k = temperature_c + 273.15
 
     # Calculate saturation vapor pressure using Tetens formula
-    es = 6.112 * np.exp((17.67 * temperature_c) / (temperature_c + 243.5)) * 100  # in Pa
+    es = (
+        6.112 * np.exp((17.67 * temperature_c) / (temperature_c + 243.5)) * 100
+    )  # in Pa
 
     # Actual vapor pressure
     e = relative_humidity * es

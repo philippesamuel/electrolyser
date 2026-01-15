@@ -47,9 +47,7 @@ def generate_lut():
     eta_act = A_TAFEL * np.log(j / J0)
     eta_ohm = currents * R_CELL
     eta_con = np.where(
-        j < J_LIMIT, 
-        (R * T_spec) / (n * F) * np.log(J_LIMIT / (J_LIMIT - j)), 
-        5.0
+        j < J_LIMIT, (R * T_spec) / (n * F) * np.log(J_LIMIT / (J_LIMIT - j)), 5.0
     )  # cap eta_con to avoid infinity
     v_cell = V_REV + eta_act + eta_ohm + eta_con
     p_stack = currents * v_cell * N_CELLS
