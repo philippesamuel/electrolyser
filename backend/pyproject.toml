@@ -1,5 +1,5 @@
 [project]
-name = "electrolyser"
+name = "electrolyser_backend"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -36,7 +36,3 @@ testpaths = [
     "tests",
 ]
 
-[tool.uv.workspace]
-members = [
-    "electrolyser_frontend",
-]
