@@ -1,3 +1,4 @@
+import os
 from typing import TypedDict
 import dash
 from dash import dcc, html
@@ -23,7 +24,7 @@ class ExtendDataDict(TypedDict):
     y: list[list[float]]
 
 
-DB_URL = "sqlite+pysqlite:///../backend/database.db"
+DB_URL = os.getenv("DATABASE_URL")
 ENGINE = create_engine(DB_URL)
 
 X_COLUMN = "timestamp"
@@ -85,7 +86,12 @@ def fetch_weather_data(start_id: int = 0) -> pd.DataFrame:
         AND (id > {start_id})
     ORDER BY {x_column} ASC
     """
-    df = pd.read_sql_query(_query, ENGINE, parse_dates=[x_column])
+    try:
+        logger.debug(f"Executing SQL query:\n{_query}")
+        df = pd.read_sql_query(_query, ENGINE, parse_dates=[x_column])
+    except Exception as e:
+        logger.error(f"Database error: {e}")
+        raise
     return df.drop_duplicates(subset=[x_column] + y_columns)
 
 
@@ -149,9 +155,8 @@ def update_weather_data(n, store_data) -> WeatherDataStore:
     [Input("weather-data-store", "data")],
     [State("live-weather-plot", "figure")],
 )
-def update_graph(
-    store_data, existing_figure
-) -> tuple[ExtendDataDict, list[int] | None, int | None]:
+def update_graph(store_data, existing_figure) -> ExtendDataDict:
+    # or ExtendDataDict, Optional[list[int]] , Optional[int]
     logger.debug("Extending graph data.")
 
     # Identify timestamps that are new (not already in the graph)
