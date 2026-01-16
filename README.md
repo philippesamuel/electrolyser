@@ -28,7 +28,8 @@ The system operates in a continuous loop:
 * **Language:** Python 3.11+
 * **Backend & ETL:** 
     - [Prefect](https://www.prefect.io/) (Orchestration) 
-    - [SQLModel](https://sqlmodel.tiangolo.com/) (ORM) 
+    - [SQLModel](https://sqlmodel.tiangolo.com/) | [SQLALchemy](https://www.sqlalchemy.org) (ORM) 
+    - [Alembic](https://alembic.sqlalchemy.org/) (DB Migrations)
     - [Pydantic](https://docs.pydantic.dev/) (Validation)
     - [Pydantic-Settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) (Settings Management)
 
@@ -41,9 +42,12 @@ The system operates in a continuous loop:
 ```text
 .
 ├── backend/
+│   ├── alembic/       # Database migrations
 │   ├── clients/       # API Clients (OpenWeather)
 │   ├── db_models/     # SQLModel Database Schemas
 │   ├── models/        # Calculations for air density, wind turbine power...
+│   ├── tests/         # Unit tests...
+│   ├── database.py    # Database engine and prefect connector
 │   ├── etl.py         # Prefect Flows & Tasks
 │   ├── main.py        # Electrolyser Simulation Logic (Physics Model)
 │   └── config.py      # Environment Configuration
