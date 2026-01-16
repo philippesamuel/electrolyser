@@ -1,13 +1,14 @@
 from loguru import logger
 from prefect import flow, task
-from config import settings
 from clients.openweather import OpenWeatherClient
 
 from db_models.weather import Weather
 from database import create_db_and_tables
 
-from sqlmodel import insert
+from sqlmodel import Session
 from prefect_sqlalchemy import SqlAlchemyConnector
+
+from config import settings
 
 
 def main():
@@ -56,7 +57,10 @@ def transform_weather_data(weather_data: Weather) -> Weather:
 def load_weather_data(block_name: str, weather_data: Weather) -> None:
     logger.info("Loading weather data into the database")
     with SqlAlchemyConnector.load(block_name) as connector:  # type: ignore[invalid-context-manager]
-        connector.execute(str(insert(Weather)), parameters=weather_data.model_dump())
+        with Session(connector.get_engine()) as session:
+            session.add(weather_data)
+            session.commit()
+
 
 
 if __name__ == "__main__":
