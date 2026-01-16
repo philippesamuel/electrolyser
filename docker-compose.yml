@@ -55,6 +55,7 @@ services:
       - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
       - WEATHER_UPDATE_INTERVAL_MINUTES=5
     volumes:
+      - ./backend:/app
       - ./backend/database.db:/app/database.db
     depends_on:
       # Wait for the setup to finish successfully before starting ETL
