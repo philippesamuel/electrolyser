@@ -42,10 +42,6 @@ services:
       prefect:
         condition: service_healthy
 
-    env_file:
-      - .env
-
-
   etl:
     build: ./backend
     command: uv run etl.py
@@ -64,9 +60,6 @@ services:
         condition: service_completed_successfully
       prefect:
         condition: service_started
-
-    env_file:
-      - .env
 
 
 volumes:
