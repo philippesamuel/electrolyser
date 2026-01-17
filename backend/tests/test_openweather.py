@@ -1,6 +1,6 @@
-from clients.openweather import OpenWeatherClient
-from db_models.weather import Weather
-from config import settings
+from src.clients.openweather import OpenWeatherClient
+from src.db_models.weather import Weather
+from src.config import settings
 
 
 # TEST_API_KEY = settings.OPENWEATHER_API_KEY.get_secret_value()

@@ -5,9 +5,9 @@ services:
       - "8050:8050"
     volumes:
       - ./frontend:/app
-      - ./backend/database.db:/app/database.db
+      - ./backend/data:/app/data
     environment: 
-      - DATABASE_URL=sqlite+pysqlite:////app/database.db
+      - DATABASE_URL=sqlite+pysqlite:////app/data/database.db
     # depends_on:
       # - backend
 
@@ -35,8 +35,9 @@ services:
     environment:
       # Point to the container name 'prefect'
       - PREFECT_API_URL=http://prefect:4200/api
+      - DATABASE_URL=sqlite+pysqlite:////app/data/database.db
     volumes:
-      - ./backend/database.db:/app/database.db
+      - ./backend/data/:/app/data/
     depends_on:
       prefect:
         condition: service_healthy
@@ -50,13 +51,13 @@ services:
     command: uv run etl.py
     environment:
       - PREFECT_API_URL=http://prefect:4200/api
-      - DATABASE_URL=sqlite+pysqlite:////app/database.db
+      - DATABASE_URL=sqlite+pysqlite:////app/data/database.db
       - OPENWEATHER_API_URI=${OPENWEATHER_API_URI}
       - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
       - WEATHER_UPDATE_INTERVAL_MINUTES=5
     volumes:
-      - ./backend:/app
-      - ./backend/database.db:/app/database.db
+      - ./backend/src:/app/src
+      - ./backend/data:/app/data
     depends_on:
       # Wait for the setup to finish successfully before starting ETL
       setup:

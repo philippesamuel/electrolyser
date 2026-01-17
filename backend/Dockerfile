@@ -22,7 +22,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 
 # Copy the project into the image
-COPY . /app
+COPY ./src /app
+
+COPY pyproject.toml uv.lock /app/
 
 # Sync the project into a new environment, asserting the lockfile is up to date
 RUN --mount=type=cache,target=/root/.cache/uv \
