@@ -1,0 +1,64 @@
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "8050:8050"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./backend/data:/app/data
+    environment: 
+      - DATABASE_URL=sqlite+pysqlite:////app/data/database.db
+
+  prefect:
+    build:
+      context: ./backend
+      dockerfile: prefect.Dockerfile
+    entrypoint: ["prefect", "server", "start", "--host", "0.0.0.0"]
+    ports:
+      - "4200:4200"
+    environment:
+      - PREFECT_UI_URL=http://localhost:4200/dashboard
+      - PREFECT_API_URL=http://localhost:4200/api
+    volumes:
+      - prefect_data:/root/.prefect
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4200/api/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  setup:
+    build: ./backend
+    command: uv run src/database.py
+    environment:
+      # Point to the container name 'prefect'
+      - PREFECT_API_URL=http://prefect:4200/api
+      - DATABASE_URL=sqlite+pysqlite:////app/data/database.db
+    volumes:
+      - ./backend/data/:/app/data/
+    depends_on:
+      prefect:
+        condition: service_healthy
+
+  etl:
+    build: ./backend
+    command: uv run src/etl.py
+    environment:
+      - PREFECT_API_URL=http://prefect:4200/api
+      - DATABASE_URL=sqlite+pysqlite:////app/data/database.db
+      - OPENWEATHER_API_URI=${OPENWEATHER_API_URI}
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
+      - WEATHER_UPDATE_INTERVAL_MINUTES=5
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/data:/app/data
+    depends_on:
+      # Wait for the setup to finish successfully before starting ETL
+      setup:
+        condition: service_completed_successfully
+      prefect:
+        condition: service_started
+
+
+volumes:
+  prefect_data:
