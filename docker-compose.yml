@@ -8,8 +8,6 @@ services:
       - ./backend/data:/app/data
     environment: 
       - DATABASE_URL=sqlite+pysqlite:////app/data/database.db
-    # depends_on:
-      # - backend
 
   prefect:
     build:
@@ -24,7 +22,7 @@ services:
     volumes:
       - prefect_data:/root/.prefect
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4200/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:4200/api/health"]
       interval: 10s
       timeout: 10s
       retries: 5
