@@ -29,7 +29,7 @@ services:
 
   setup:
     build: ./backend
-    command: uv run database.py
+    command: uv run src/database.py
     environment:
       # Point to the container name 'prefect'
       - PREFECT_API_URL=http://prefect:4200/api
@@ -42,7 +42,7 @@ services:
 
   etl:
     build: ./backend
-    command: uv run etl.py
+    command: uv run src/etl.py
     environment:
       - PREFECT_API_URL=http://prefect:4200/api
       - DATABASE_URL=sqlite+pysqlite:////app/data/database.db

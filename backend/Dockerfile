@@ -22,7 +22,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 
 # Copy the project into the image
-COPY ./src /app
+COPY ./src /app/src
 
 COPY pyproject.toml uv.lock /app/
 
