@@ -1,52 +1,51 @@
 import os
+from itertools import compress
 from typing import TypedDict
+
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output, State
+
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+
 from sqlalchemy import create_engine
 import pandas as pd
-
-from itertools import compress
 
 from loguru import logger
 
 
-class WeatherDataStore(TypedDict):
-    id: list[int]
-    x: list[float]
-    y: list[list[float]]
-
-
-class ExtendDataDict(TypedDict):
-    x: list[list[float]]
-    y: list[list[float]]
-
-
+UPDATE_INTERVAL_MS = int(os.getenv("DASH_UPDATE_INTERVAL_MS", 60_000))  
 DB_URL = os.getenv("DATABASE_URL")
 ENGINE = create_engine(DB_URL)
 
+UPDATE_COLUMN = "updated_at"
 X_COLUMN = "timestamp"
-Y_COLUMN_NAMES = [
-    "temperature_k",
-    "pressure_pa",
-    "humidity_percent",
-    "wind_speed_m_s",
-    # "wind_deg",
-    # "wind_gust_m_s"
-]
 Y_TITLES = {
     "temperature_k": "Temperature [K]",
     "pressure_pa": "Pressure [Pa]",
     "humidity_percent": "Humidity [%]",
     "wind_speed_m_s": "Wind Speed [m/s]",
-    "wind_deg": "Wind Direction [deg]",
-    "wind_gust_m_s": "Wind Gust [m/s]",
+    # "wind_deg": "Wind Direction [deg]",
+    # "wind_gust_m_s": "Wind Gust [m/s]",
 }
+Y_COLUMN_NAMES = list(Y_TITLES.keys())
+
+
+class WeatherDataStore(TypedDict):
+    id: list[int]
+    updated_at: list[str]
+    x: list[str]
+    y: list[list[float]]
+
+
+class ExtendDataDict(TypedDict):
+    x: list[list[str]]
+    y: list[list[float]]
 
 
 def create_empty_figure() -> go.Figure:
+    """Initialize chart layout."""
     fig = make_subplots(
         rows=len(Y_COLUMN_NAMES), cols=1, shared_xaxes=True, vertical_spacing=0.05
     )
@@ -70,29 +69,54 @@ def create_empty_figure() -> go.Figure:
     return fig
 
 
-def fetch_weather_data(start_id: int = 0) -> pd.DataFrame:
+def fetch_weather_data(min_updated_at: str|None=None) -> pd.DataFrame:
+    """Fetches only records that have been updated since 'min_updated_at'.
+
+    If min_updated_at is None, fetches a default window (e.g., last 24h).
+    """
     table_name = "weather"
-    x_column = "timestamp"
-    y_columns = Y_COLUMN_NAMES
-    x_min = "datetime('now', '-1 day')"  # last 1 day
-    _query = f"""
-    SELECT
-        id,
-        {x_column},
-        {", ".join(y_columns)}
+
+    cols_to_select = ["id", UPDATE_COLUMN, X_COLUMN] + Y_COLUMN_NAMES
+
+    if min_updated_at is not None:
+        where_clause = f"{UPDATE_COLUMN} > {min_updated_at}"
+        logger.debug(f"Incremental fetch: {where_clause}")
+    else:
+        logger.info("Initial load: Fetching last 24h of data")
+        where_clause = f"{X_COLUMN} >= datetime('now', '-1 day')"
+
+    query = f"""
+    SELECT {", ".join(cols_to_select)}
     FROM {table_name}
-    WHERE 
-        ({x_column} >= {x_min})
-        AND (id > {start_id})
-    ORDER BY {x_column} ASC
+    WHERE {where_clause}
+    ORDER BY {X_COLUMN} ASC
     """
     try:
-        logger.debug(f"Executing SQL query:\n{_query}")
-        df = pd.read_sql_query(_query, ENGINE, parse_dates=[x_column])
+        logger.debug(f"Executing SQL query:\n{query}")
+        df = pd.read_sql_query(query, ENGINE, parse_dates=[X_COLUMN, UPDATE_COLUMN])
     except Exception as e:
         logger.error(f"Database error: {e}")
-        raise
-    return df.drop_duplicates(subset=[x_column] + y_columns)
+        return pd.DataFrame(columns=cols_to_select)
+    return df.drop_duplicates(subset=[X_COLUMN] + Y_COLUMN_NAMES)
+
+
+def append_to_store(current_store: WeatherDataStore, new_df: pd.DataFrame) -> WeatherDataStore:
+    """Append new DataFrame rows to existing data store."""
+    if new_df.empty:
+        return current_store
+    
+    def extend_list(key, values):
+        current_store[key].extend(values)
+
+    extend_list("id", new_df["id"].tolist())
+    extend_list(UPDATE_COLUMN, new_df[UPDATE_COLUMN].dt.isoformat().tolist())
+    extend_list(X_COLUMN, new_df[X_COLUMN].dt.isoformat().tolist())
+
+    # Append Y columns (list of lists)
+    for i, col in enumerate(Y_COLUMN_NAMES):
+        current_store["y"][i].extend(new_df[col].tolist())
+
+    return current_store
 
 
 def df_to_weather_data_store(df: pd.DataFrame) -> WeatherDataStore:
@@ -103,8 +127,17 @@ def df_to_weather_data_store(df: pd.DataFrame) -> WeatherDataStore:
     }
 
 
-# --- 2. DASH APP SETUP ---
+# --- DASH APP SETUP ---
 app = dash.Dash(__name__)
+
+# Initial empty state
+initial_store: WeatherDataStore = {
+    "id": [],
+    "updated_at": [],
+    "x": [],
+    "y": [[] for _ in Y_COLUMN_NAMES],
+}
+
 logger.info("Dash app initialized for live weather monitoring.")
 
 app.layout = html.Div(
@@ -120,34 +153,41 @@ app.layout = html.Div(
         ),
         dcc.Store(
             id="weather-data-store",
-            data=df_to_weather_data_store(fetch_weather_data(0)),
+            data={"id": [], "x": [], "y": [[] for _ in Y_COLUMN_NAMES]},
+            # data=df_to_weather_data_store(fetch_weather_data(0)),
         ),
         # Interval Component: Fires every 5 minutes (300,000 milliseconds)
-        dcc.Interval(id="interval-component", interval=60_000, n_intervals=0),
+        dcc.Interval(
+            id="interval-component", 
+            interval=UPDATE_INTERVAL_MS, 
+            n_intervals=0
+            ),
     ]
 )
 
 
-# --- 3. CALLBACK FOR UPDATES ---
+# --- CALLBACK FOR UPDATES ---
 @app.callback(
     Output("weather-data-store", "data"),
     [Input("interval-component", "n_intervals")],
     [State("weather-data-store", "data")],
 )
-def update_weather_data(n, store_data) -> WeatherDataStore:
+def update_weather_data(n, store_data: WeatherDataStore) -> WeatherDataStore:
     logger.debug(f"Updating data at interval {n}")
-    # Connect to DB and fetch data
-    # We use a context manager to ensure the connection closes cleanly
-    try:
-        # Querying all data. For very large datasets, consider LIMIT or a time window (WHERE timestamp > X)
+    last_updated_at = None
+    if store_data[UPDATE_COLUMN]:
+        last_updated_at = max(store_data[UPDATE_COLUMN])
 
-        df = fetch_weather_data(0)
-        logger.info(f"Fetched {len(df)} weather records from database.")
-    except Exception as e:
-        logger.error(f"Database error: {e}")
-        return store_data  # return existing data on error
+    new_df = fetch_weather_data(min_updated_at=last_updated_at)
 
-    return df_to_weather_data_store(df)
+    if new_df.empty:
+        logger.debug("No new data found.")
+        return store_data
+
+    logger.info(f"Fetched {len(new_df)} new records.")
+
+    updated_data = append_to_store(store_data, new_df)
+    return updated_data
 
 
 @app.callback(
@@ -155,26 +195,42 @@ def update_weather_data(n, store_data) -> WeatherDataStore:
     [Input("weather-data-store", "data")],
     [State("live-weather-plot", "figure")],
 )
-def update_graph(store_data, existing_figure) -> ExtendDataDict:
+def update_graph(store_data: WeatherDataStore, existing_figure) -> ExtendDataDict:
     # or ExtendDataDict, Optional[list[int]] , Optional[int]
     logger.debug("Extending graph data.")
+    if not store_data[X_COLUMN]:
+        return dash.no_update
 
     # Identify timestamps that are new (not already in the graph)
-    existing_timestamps = set(existing_figure["data"][0]["x"])
-    is_new_timestamp = [x not in existing_timestamps for x in store_data["x"]]
+    try:
+        existing_timestamps = set(existing_figure["data"][0][X_COLUMN])
+    except (IndexError, KeyError):
+        existing_timestamps = set()
+    
+    new_indices = [
+        i for i, x_val in enumerate(store_data[X_COLUMN])
+        if x_val not in existing_timestamps
+    ]
 
-    # Extract only new data points
-    new_x_values = list(compress(store_data["x"], is_new_timestamp))
-    new_y_values = [list(compress(y, is_new_timestamp)) for y in store_data["y"]]
+    if not new_indices:
+        return dash.no_update
+    
+    logger.debug(f"Pushing {len(new_indices)} new points to graph.")
 
-    extend_data: ExtendDataDict = {
-        "x": [new_x_values for _ in Y_COLUMN_NAMES],
-        "y": new_y_values,
+    # Extract the data subsets based on the new indices
+    new_x = [store_data["x"][i] for i in new_indices]
+    new_y = [
+        [col_data[i] for i in new_indices] 
+        for col_data in store_data["y"]
+    ]
+
+    return {
+        "x": [new_x for _ in Y_COLUMN_NAMES],
+        "y": new_y
     }
-    return extend_data  # No need to update layout
 
 
-# --- 4. RUN SERVER ---
+# --- RUN SERVER ---
 if __name__ == "__main__":
     logger.info("Starting Dash server in debug mode.")
     app.run(debug=True)

@@ -22,11 +22,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 
 # Copy the project into the image
-COPY . /app
+COPY ./src /app/src
+
+COPY pyproject.toml uv.lock /app/
 
 # Sync the project into a new environment, asserting the lockfile is up to date
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked
 EXPOSE 8050
-# CMD ["uv", "run", "main:main"]
-CMD ["uv", "run", "gunicorn", "-b", "0.0.0.0:8050", "main:server"]
+# CMD ["uv", "run", "src.main:main"]
+CMD ["uv", "run", "gunicorn", "--chdir", "src", "-b", "0.0.0.0:8050", "main:server"]
