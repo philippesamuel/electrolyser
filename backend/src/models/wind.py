@@ -28,8 +28,23 @@ class WindTurbineModel(BaseModel):
         self, wind_speed_m_s: float, air_density_kg_m3: float = 1.225
     ) -> float:
         """Calculate the power output of the wind turbine."""
-        pho = air_density_kg_m3
-        A = self.rotor_area_m2
-        Cp = self.power_coefficient
-        v = wind_speed_m_s
-        return (pho * A * Cp * v**3) / 2
+        return calc_wind_power_watts(
+            wind_speed_m_s=wind_speed_m_s,
+            rotor_area_m2=self.rotor_area_m2,
+            power_coefficient=self.power_coefficient,
+            air_density_kg_m3=air_density_kg_m3,
+        )
+
+
+def calc_wind_power_watts(
+    wind_speed_m_s: float,
+    rotor_area_m2: float,
+    power_coefficient: float,
+    air_density_kg_m3: float,
+) -> float:
+    """Calculate the power output of the wind turbine."""
+    pho = air_density_kg_m3
+    A = rotor_area_m2
+    Cp = power_coefficient
+    v = wind_speed_m_s
+    return (pho * A * Cp * v**3) / 2
