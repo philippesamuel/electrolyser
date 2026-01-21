@@ -19,13 +19,18 @@ UPDATE_INTERVAL_MS = int(os.getenv("DASH_UPDATE_INTERVAL_MS", 60_000))
 DB_URL = os.getenv("DATABASE_URL")
 ENGINE = create_engine(DB_URL)
 
+TABLE_NAME = "v_wind_power"
 UPDATE_COLUMN = "updated_at"
 X_COLUMN = "timestamp"
 Y_TITLES = {
-    "temperature_k": "Temperature [K]",
+    "temperature_c": "Temperature [°C]",
     "pressure_pa": "Pressure [Pa]",
-    "humidity_percent": "Humidity [%]",
+    "humidity": "Humidity",
+    "moist_air_density_kg_m3": "Moist Air Density [kg/m³]",
     "wind_speed_m_s": "Wind Speed [m/s]",
+    "turbine_is_on": "Turbine is On",
+    "max_specific_wind_power_watts_m2": "Max Specific Wind Power [W/m²]",
+    # "temperature_k": "Temperature [K]",
     # "wind_deg": "Wind Direction [deg]",
     # "wind_gust_m_s": "Wind Gust [m/s]",
 }
@@ -33,7 +38,6 @@ Y_COLUMN_NAMES = list(Y_TITLES.keys())
 
 
 class WeatherDataStore(TypedDict):
-    id: list[int]
     updated_at: list[str]
     x: list[str]
     y: list[list[float]]
@@ -56,6 +60,11 @@ def create_empty_figure() -> go.Figure:
                 y=[],
                 name=Y_TITLES[col],
                 mode="lines+markers",
+                line_dash="dash",
+                marker_symbol="circle",
+                # mode="lines",
+                # line_dash="solid",
+                line_shape="hv",
             ),
             row=i + 1,
             col=1,
@@ -64,6 +73,7 @@ def create_empty_figure() -> go.Figure:
     fig.update_layout(
         # title_text="Live Weather Data",
         # legend=dict(orientation="h", y=1.1, x=0.5, xanchor='center'),
+        legend=dict(visible=False),
         template="plotly_white"
     )
     return fig
@@ -74,12 +84,11 @@ def fetch_weather_data(min_updated_at: str|None=None) -> pd.DataFrame:
 
     If min_updated_at is None, fetches a default window (e.g., last 24h).
     """
-    table_name = "weather"
-
-    cols_to_select = ["id", UPDATE_COLUMN, X_COLUMN] + Y_COLUMN_NAMES
+    table_name = TABLE_NAME
+    cols_to_select = [UPDATE_COLUMN, X_COLUMN] + Y_COLUMN_NAMES
 
     if min_updated_at is not None:
-        where_clause = f"{UPDATE_COLUMN} > {min_updated_at}"
+        where_clause = f"{UPDATE_COLUMN} > '{min_updated_at}'"
         logger.debug(f"Incremental fetch: {where_clause}")
     else:
         logger.info("Initial load: Fetching last 24h of data")
@@ -108,23 +117,14 @@ def append_to_store(current_store: WeatherDataStore, new_df: pd.DataFrame) -> We
     def extend_list(key, values):
         current_store[key].extend(values)
 
-    extend_list("id", new_df["id"].tolist())
-    extend_list(UPDATE_COLUMN, new_df[UPDATE_COLUMN].dt.isoformat().tolist())
-    extend_list(X_COLUMN, new_df[X_COLUMN].dt.isoformat().tolist())
+    extend_list("updated_at", new_df[UPDATE_COLUMN].dt.strftime("%Y-%m-%d %H:%M:%S%Z").tolist())
+    extend_list("x", new_df[X_COLUMN].dt.strftime("%Y-%m-%d %H:%M:%S%Z").tolist())
 
     # Append Y columns (list of lists)
     for i, col in enumerate(Y_COLUMN_NAMES):
         current_store["y"][i].extend(new_df[col].tolist())
 
     return current_store
-
-
-def df_to_weather_data_store(df: pd.DataFrame) -> WeatherDataStore:
-    return {
-        "id": df["id"].tolist(),
-        "x": df[X_COLUMN].tolist(),
-        "y": [df[col].tolist() for col in Y_COLUMN_NAMES],
-    }
 
 
 # --- DASH APP SETUP ---
@@ -148,12 +148,12 @@ app.layout = html.Div(
             dcc.Graph(
                 id="live-weather-plot",
                 figure=create_empty_figure(),
-                style={"height": "80vh"},
+                style={"height": "160vh"},
             ),
         ),
         dcc.Store(
             id="weather-data-store",
-            data={"id": [], "x": [], "y": [[] for _ in Y_COLUMN_NAMES]},
+            data=initial_store,
             # data=df_to_weather_data_store(fetch_weather_data(0)),
         ),
         # Interval Component: Fires every 5 minutes (300,000 milliseconds)
@@ -175,8 +175,8 @@ app.layout = html.Div(
 def update_weather_data(n, store_data: WeatherDataStore) -> WeatherDataStore:
     logger.debug(f"Updating data at interval {n}")
     last_updated_at = None
-    if store_data[UPDATE_COLUMN]:
-        last_updated_at = max(store_data[UPDATE_COLUMN])
+    if store_data["updated_at"]:
+        last_updated_at = max(store_data["updated_at"])
 
     new_df = fetch_weather_data(min_updated_at=last_updated_at)
 
@@ -198,17 +198,17 @@ def update_weather_data(n, store_data: WeatherDataStore) -> WeatherDataStore:
 def update_graph(store_data: WeatherDataStore, existing_figure) -> ExtendDataDict:
     # or ExtendDataDict, Optional[list[int]] , Optional[int]
     logger.debug("Extending graph data.")
-    if not store_data[X_COLUMN]:
+    if not store_data["x"]:
         return dash.no_update
 
     # Identify timestamps that are new (not already in the graph)
     try:
-        existing_timestamps = set(existing_figure["data"][0][X_COLUMN])
+        existing_timestamps = set(existing_figure["data"][0]["x"])
     except (IndexError, KeyError):
         existing_timestamps = set()
     
     new_indices = [
-        i for i, x_val in enumerate(store_data[X_COLUMN])
+        i for i, x_val in enumerate(store_data["x"])
         if x_val not in existing_timestamps
     ]
 
